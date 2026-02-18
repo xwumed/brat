@@ -1,0 +1,13 @@
+# Exclude large model files
+*.bin
+*.pt
+*.h5
+*.pth
+
+# Exclude uv environment
+.venv/
+.env
+
+# Exclude system files
+.DS_Store
+__pycache__/
