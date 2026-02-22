@@ -54,6 +54,7 @@ python extract_features.py \
   --mode full
 ```
 
+
 **Vision backbone only:**
 ```bash
 python extract_features.py \
@@ -62,6 +63,19 @@ python extract_features.py \
   --in-channels 1 \
   --mode vision
 ```
+
+### Batch Feature Extraction (Recommended)
+To extract features for a folder containing multiple patient subdirectories (each containing NIfTI files):
+
+```bash
+python run_inference.py \
+  --weights brat_4m_densenet169.bin \
+  --data_dir /path/to/your/MRI_data
+```
+
+*   **Default Output**: Features will be saved to `/path/to/your/MRI_data_brat` (automatically appended with `_brat`).
+*   **Custom Output**: Use `--output_dir /path/to/output` to specify a custom directory.
+*   **Input Structure**: The script expects patient subdirectories containing `.nii.gz` files. It automatically identifies T1c, T1, T2, FLAIR modalities.
 
 ## Preprocessing Pipeline
 

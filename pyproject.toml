@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "monai==1.4.0",
+    "nibabel==5.3.3",
     "safetensors==0.4.3",
     "salesforce-lavis==1.0.2",
     "torch==2.3.0",

@@ -1,0 +1,1191 @@
+                                                        brat : Aligned Multi-View Embeddings for Brain MRI Analysis
+
+                                                           Maxime Kayser1,2 *  Maksim Gridnev1                               Wanting Wang1,3
+                                                            Max Bain2      Aneesh Rangnekar1                                Avijit Chatterjee1
+                                                                   1
+                                                   Aleksandr Petrov      Harini Veeraraghavan1                                 Nathaniel C. Swinburne1
+                                                               1
+                                                                   Memorial Sloan Kettering Cancer Center, New York, United States
+                                                                              2
+                                                                                University of Oxford, United Kingdom
+arXiv:2512.18679v1 [cs.CV] 21 Dec 2025
+
+
+
+
+                                                                         3
+                                                                           London School of Economics, United Kingdom
+
+
+                                                                    Abstract                                                                                       embedding space
+
+
+
+                                                                                                                                                                              Report
+                                         We present brat (brain report alignment transformer), a
+                                         multi-view representation learning framework for brain
+                                         magnetic resonance imaging (MRI) trained on MRIs paired
+                                                                                                                                                                             Brain MRI
+                                         with clinical reports. Brain MRIs present unique challenges
+                                         due to the presence of numerous, highly varied, and often
+                                         subtle abnormalities that are localized to a few slices within
+                                         a 3D volume. To address these challenges, we introduce a
+                                                                                                                                                                            Clinical
+                                         brain MRI dataset 10× larger than existing ones, contain-                                                                          Features
+                                         ing approximately 80,000 3D scans with corresponding ra-
+                                         diology reports, and propose a multi-view pre-training ap-
+                                         proach inspired by advances in document retrieval. We de-
+                                         velop an implicit query-feature matching mechanism and
+                                         adopt concepts from quality-diversity to obtain multi-view        The 2.8 x 1.7 cm peripherally enhancing right
+                                                                                                                                                                                     Aligned MRI
+                                                                                                                                                                                     Multi-view
+                                         embeddings of MRIs that are aligned with the clinical fea-        cerebellar metastasis exhibits characteristics that                       Embeddings
+                                                                                                           may suggest radiation necrosis. [...] Enhancing
+                                         tures given by report sentences. We evaluate our approach         lesions are noted in the left inferior temporal lobe,
+                                         across multiple vision-language and vision tasks, demon-          left posterior inferior temporal lobe, and right
+                                                                                                           inferior frontal lobe. [...] No hydrocephalus is
+                                         strating substantial performance improvements. The brat           present. The orbital soft tissues and cavernous
+                                         foundation models are publicly released1 .                        sinus appear unremarkable.
+
+
+                                                                                                          Figure 1. (Left) Brain MRI reports contain rich and diverse infor-
+                                         1. Introduction                                                  mation relating to different features and regions of the brain. Re-
+                                                                                                          port sentences are associated with visual features via their colours.
+                                         MRIs are standard-of-care imaging performed for diagnos-         The report was cut off ([...]) to only contain findings visible on
+                                         ing and managing neurodegenerative diseases and cancers          this 2D slice. (Right) By drawing parallels to multi-vector re-
+                                         occurring in the brain. Despite their clinical importance,       trieval Zhang et al. [50], we align multi-view embeddings of the
+                                         developing effective AI models for analyzing 3D brain MRI        MRI with clinical features given in the reports. Multi-view embed-
+                                         present significant challenges due to the complex anatomy        dings can attend across the volume, reflecting that clinical features
+                                                                                                          may correspond to more than one spatial region of the scan.
+                                         and the limited numbers of well-annotated datasets.
+                                            Modern vision-language models (VLM) and vision-
+                                         language pre-training (VLP) have shown the capability            datasets and the limited generalization of conventional
+                                         to generate descriptive free-text summarizing medical im-        vision-language (VL) methods designed for 2D images
+                                         ages [47] and produce strong vision backbones [15]. How-         have hindered the development of effective VL approaches
+                                         ever, the scarcity of large-scale medical 3D image-text          for 3D imaging modalities. Clinical reports for cross-
+                                           * Corresponding author: kayserm1@mskcc.org                     sectional scans such as CT and MRI often contain rich, di-
+                                           1 https://github.com/maximek3/brat                             verse information, with multiple sections addressing differ-
+ent aspects of the scan (see Figure 1). Existing approaches      2. Related Work
+that aim to learn joint representations of medical images
+and paired text often overlook the complexity and length         Multi-vector document retrieval. Document retrieval,
+of these reports. A common approach is to adopt architec-        which involves retrieving documents based on user queries,
+tures used in natural image captioning, consisting of single     has seen significant improvements through the use of multi-
+sentence descriptions represented via a single embedding.        vector retrieval methods, instead of traditional single-vector
+Such an approach fails to fully leverage the richness of clin-   approaches. In single-vector retrieval, documents are repre-
+ical narratives as a learning signal to extract diverse image    sented as a single embedding, limiting the ability to cap-
+representations [11, 24].                                        ture the diversity of information in documents [21, 31].
+                                                                 In contrast, multi-vector embeddings offer more versatile
+   We address these limitations by introducing MSKBrain,         query-document interactions, which better represent the va-
+the largest existing multimodal brain MRI dataset with           riety of information in documents. A key work is Col-
+approximately 80,000 3D MRIs and paired reports, and             BERT [22, 36], which computes query-document similar-
+propose a new VLP framework called brat (brain report            ity by selecting the most similar document token for each
+alignment transformer).                                          query token and aggregating the similarities across a doc-
+   brat is based on the premise that, similar to documents,      ument. Despite radiology reports often being of document
+clinical reports can consist of extensive text describing a      length, these ideas have not yet been applied to image-text
+wide range of findings. Multi-view embedding approaches          datasets. Zhang et al. [50] emphasized that documents typ-
+have been used in document retrieval to represent the di-        ically contain multiple semantic units, each relevant to dif-
+versity of information in a document, which can then be          ferent queries, and proposed using multi-view embeddings
+mapped to sub-units of the user query [22]. In our work,         to represent these diverse aspects. Drawing inspiration from
+we use such learnable multi-view embeddings to represent         their method, we treat brain MRI scans as “documents”
+the diversity of information in 3D brain MRI, whereas the        and report sentences as corresponding “queries”, to enhance
+corresponding reports are subdivided into sentence embed-        representation and retrieval.
+dings or sub-units. By aligning these sub-units with the             Vision-Language Pre-training (VLP). VLP on large-
+brain MRI via contrastive learning, we implicitly encour-        scale datasets of paired images and captions is an effective
+age the multi-view image embeddings to represent the clin-       way to learn image-representations for both vision [10, 35,
+ical features described by the sentences (see Figure 1). We      39] and VL tasks [1, 8, 43]. Vision-language datasets occur
+formulate the multi-view embeddings such that they can           naturally in medical imaging, as radiologists routinely write
+represent features that are not restricted to a single spatial   reports to describe findings in medical scans. Large-scale
+location (e.g., brain metastases may appear in multiple sub-     public datasets are predominantly available for chest X-
+regions of the 3D volume). We align the multi-view embed-        rays [5, 16, 20], and as such most approaches focus on this
+dings with sub-unit sentence embeddings through the pro-         domain [44, 45, 51, 52]. Recently, there have been efforts
+posed Pairwise View Alignment (PVA) matching algorithm           to publish datasets in more advanced imaging modalities,
+and enhance their diversity via a quality diversity (QD) loss    such as lung CTs [9]. Some existing models attempt to cap-
+based on Determinental Point Processes (DPPs) [25].              ture the fine-grained features of medical images by aligning
+                                                                 local image feature patches with text tokens [15, 42]. How-
+   Our results show that brat improves accuracy of image-        ever, this is limited by the fact that individual text tokens
+text and text-image retrieval. Vision backbones trained via      are not necessarily representative of clinical features, and
+brat produced higher accuracies on downstream tasks, in-         image patches are restricted to a single spatial region in the
+cluding report generation, tumour segmentation, and classi-      image. In addition, chest X-rays are 2D images and their
+fication of Alzheimer’s disease. Our contributions include:      reports often only contain 2-3 image-descriptive sentences.
+   (i) We present the largest ever dataset of 3D radiographs     3D scans such as brain MRIs, typically have reports that are
+       and clinical reports (with 88% abnormality rate).         several times larger. Recently, the first models have been
+  (ii) We propose a new multi-view VL representation             trained on large 3D lung CTs and report datasets, relying
+       learning framework tailored for complex 3D medical        mainly on scale to achieve good results [47].
+       images by drawing parallels to document retrieval.            A suite of existing VLMs use learnable latent variables to
+ (iii) We introduce concepts from Quality-Diversity by           efficiently compress visual representations [18, 26]. BLIP-
+       applying DPPs that encourage diverse and aligned          2 [26], for example, employs a Q-Former model that uses
+       multi-view embeddings.                                    “querying tokens” as learnable latents that align cross-
+ (iv) We pre-train and evaluate state-of-the-art brain MRI       modal representations. We adopt a similar architecture,
+       foundation models on a wide range of tasks. The           with the querying tokens representing the learnable multi-
+       weights are publicly released.                            view embeddings that we align to clinical features.
+                                    Quality-Diversity                                 Pairwise View Alignment 1                                                         Multi-view MRI
+                                    Repulsion via DPPs                                Multi-view embeddings get
+                                                                                      aligned with clinical features
+                                                                                                                                  AvgPool                               embeddings
+                                                   Maximize DPP                       using our PVA algorithm
+                                                   Kernel                                                                                                                                …
+                                                                    2
+  MRI Feat.
+                                                                                                                         …                                             Different views focus on
+                                                                                                                                                            3          different clinical features
+  Extractor
+
+                                                                                                    …                      CLS                  SEP        SEP   … SEP                         EOS
+
+
+
+                                                    Cross-attention MRI Image Encoder                                                                 Report Encoder
+
+                                                                                                   …                      CLS    t1   … t   n
+                                                                                                                                                SEP    … SEP … SEP            t1   … t    m
+                                                                                                                                                                                               EOS
+
+                                                                Learnable Latents                                                       Report Sentences (Clinical Features)
+
+
+Figure 2. Our brat framework. Our Pairwise View Alignment (PVA) algorithm (described in Section 3.2) and quality-diversity via Deter-
+minental Point Processes (DPPs) (described in Section 3.2) lead to clinically aligned multi-view embeddings of the MRI.
+
+
+        Training Step: 100           Training Step: 500         Training Step: 2000             Training Step:
+                                                                                                        50000      ports, structured labels, and is extremely rich in anomalies.
+                                                                                                                   We show that it leads to improved representation learning
+                                                                                                                   and downstream performance.
+
+  Multi-view Embeddings from brat      Query tokens from Q-former
+                                                                                                                   3. Methods
+Figure 3. Conventional query tokens collapse into a single repre-
+                                                                                                                   3.1. The MSKBrain Dataset
+sentation as training progresses. The multi-view embeddings of                                                     We collected a comprehensive dataset of brain MRI scans
+brat, on the other hand, are diverse and spread out. The plot was                                                  and their corresponding clinical reports from a cancer cen-
+obtained by multi-dimensional scaling of 32 query tokens to 2D                                                     ter, covering the period from 2012 to 2017. These scans
+based on their mean pairwise distances from 32 images.                                                             were primarily obtained to monitor brain metastases and tu-
+                                                                                                                   mors in cancer patients, resulting in a dataset rich in posi-
+    Quality-diversity of learned features. Increasing di-                                                          tive findings (87.9% of scans show abnormalities) and rep-
+versity of features can be useful to avoid informational col-                                                      resentative of a diverse patient population. We also col-
+lapse in self-supervised learning (SSL) [4, 48] or to cap-                                                         lected extensive demographic data, primary diagnosis, on-
+ture different aspects of an input, e.g. in document re-                                                           going chemotherapy and radiotherapy treatments, and sur-
+trieval [50]. To achieve this, Zhang et al. [50] penalize                                                          vival information, which will be considered in future stud-
+high pairwise similarity between embedding vectors. De-                                                            ies. Our dataset includes 77,228 brain MRI image-report
+terminantal point processes (DPPs), however, measure of                                                            pairs from 24,262 unique patients. To develop our model,
+the overall spread of diversity and integrate quality notions                                                      we performed a patient-wise split of the data into 75,142
+seamlessly [25]. Whilst they have been used for increas-                                                           examples for training, 945 for development, and 1,141 for
+ing quality and diversity in recommender systems, sum-                                                             the test set. Further details are given in Table 1.
+marisation, or dataset/batch sampling [27, 37], they have                                                              As the focus of this work is on learning image repre-
+not yet been applied to multi-view representation learning.                                                        sentations of brain MRIs, we ensured that all report content
+We show that they are well-suited for this and outperform                                                          was visually grounded in the corresponding images. For ex-
+simple pairwise similarity reduction.                                                                              ample, keyword filtering revealed that 94% of reports make
+    Brain MRI analysis. The scarcity of large-scale brain                                                          references to prior scans. To efficiently remove these refer-
+MRI datasets (and lack of VL datasets) has led researchers                                                         ences, as well as information from excluded MRI modali-
+to pool smaller public datasets [30] and focus on SSL tasks                                                        ties and protected health information (PHI), we developed a
+(e.g. reversing various image augmentations [32, 41, 49],                                                          PHI-enabled GPT-4 pipeline. This pipeline simultaneously
+masked image modeling [3, 13, 19, 40], or contrastive                                                              re-wrote reports to make them visually grounded and ex-
+losses [7]). Other efforts aim to generalize across MRI                                                            tracted structured data for further use. Liu et al. [28] demon-
+modalities [23, 46]. Downstream applications often focus                                                           strated that GPT-4 performs well on radiology report pro-
+on segmentation, notably via the BraTS datasets [2, 29], on                                                        cessing; and indeed, we found that our pipeline achieved
+which we evaluate our models. MSKBrain is around 10×                                                               an annotation accuracy of 96% on a gold standard set of 50
+larger than the biggest available brain MRI dataset (80K vs.                                                       manually annotated reports. Annotating all the reports cost
+8K MRI sessions). Moreover, it comes with radiology re-                                                            approximately $1,600, which is significantly lower than the
+Characteristic                                  Value               vi ∈ RDV . The text encoder ER takes a brain MRI radi-
+Word Count (Q1, Median, Q3)                115, 134, 156
+                                                                    ology report and returns sentence embeddings that capture
+Sentence Count (Q1, Median, Q3)               7, 9, 11              the clinical features described in them: ER (R) = F , where
+Age (Q1, Median, Q3)                        45, 58, 68              F = [f1 , . . . , fNS ] with fi ∈ RDF representing the i-th
+Any Abnormality (%)                             87.9                sentence. We obtain sentence embeddings fi by averaging
+Prior Surgery (%)                               38.1                all token embeddings of the sentence. As DF = DV = D,
+Enhancing Lesions (%)                           47.6                D is used in the rest of the paper for clarity. Implementation
+Midline Shift (%)                               5.4                 details are provided in Appendix 8.
+White Matter Changes (%)                        43.6                    Existing approaches that use latent variables to extract
+Pituitary Gland Abnormality (%)                  2.3                image features often exhibit embedding collapse, where the
+Hydrocephalus (%)                                2.6                learned latents converge into a single representation [6] (an
+Biggest Mass Length (%)              <1cm (17.7), 1-2cm (14.5)
+                                                                    illustration is given in Figure 3). To ensure that we ob-
+                                           >2cm (18.8)
+Enhancing Lesion Count (%)              1 (27.0), 2-6 (23.0)
+                                                                    tain multi-view embeddings focusing on distinct clinical
+                                       7-15 (1.6), >15 (2.3)        features, we introduce a two-step approach: (1) Pairwise
+# of Unique Surgeries                         32,428                View Alignment (PVA) to align embeddings with clinically
+# of Enhancing Lesion Locations               95,815                meaningful features, and (2) quality-diversity repulsion us-
+                                                                    ing determinantal point processes (DPPs) to encourage di-
+Table 1. Brain MRI dataset characteristics. For reference, Con-     versity in the learned representations.
+ceptual Captions [38] has 10 tokens (< 10 words) per image.
+                                                                    Pairwise View Alignment The PVA algorithm aligns the
+cost of expert annotation. More information on the dataset          multi-view embeddings with clinically meaningful features,
+and processing is provided in Appendix 6.                           i.e., sentence embeddings. PVA formulates the alignment
+                                                                    as a greedy bipartite matching problem, ensuring each im-
+3.2. The brat Framework                                             age view is matched to at most one unique sentence embed-
+Volumetric brain MRIs are visually complex due to the var-          ding. As outlined in Algorithm 1, the computational cost is
+ied appearance of brain tumors, their effects on surrounding        dominated by sorting the similarity pairs, resulting in a time
+tissue, and findings being diverse and spread across the 3D         complexity of O(NQ NS log(NQ NS )). The overall image-
+volume. Multi-view embeddings have been shown to im-                report similarity, used for the contrastive loss, is then given
+prove document representations by capturing different se-           by the average of all multi-view embeddings and matched
+mantic elements within a text [50]. By drawing parallels            clinical feature similarities.
+between the distinct set of findings in brain MRIs and the
+                                                                    Algorithm 1 Pairwise View Alignment (PVA)
+distinct semantic units of documents, we hypothesize that
+multi-view embeddings provide a more flexible, and thus             Input: Normalized multi-view embeddings V ∈ RNQ ×D
+more suitable, representation for brain MRI images. Specif-         and report features F ∈ RNS ×D
+ically, we assume that individual sentences in radiology re-        Output: Set of matched pairs PM
+ports correspond to distinct clinical features, and we align         1: Compute similarity matrix S ∈ RNQ ×NS via
+the multi-view embeddings to encapsulate these same clin-               S ← V FT
+ical characteristics (see Figure 1).                                 2: Create a list L of all tuples (i, j, Si,j ) sorted in descend-
+    We model this using brat, a vision-language contrastive             ing order of similarity Si,j
+pre-training framework that represents images via aligned            3: Initialize matched pairs PM ← ∅
+multi-view embeddings. We obtain multi-view embeddings               4: Initialize sets of occupied indices OV ← ∅, OF ← ∅
+by adopting a base architecture similar to Q-Former [26],            5: for each (i, j, sim) in L do
+i.e., by having learnable latents to extract multi-view em-          6:    {Select pair only if both view i and feature j are un-
+beddings by cross-attending to localized MRI features (see                 matched}
+Fig. 2). A 3D vision model M is used to extract these fea-           7:    if i ∈
+                                                                                / OV ∧ j ∈ / OF then
+tures from an MRI image I, resulting in a set of feature             8:       Add (i, j) to matchd pairs: PM ← PM ∪ {(i, j)}
+maps M (I) = A ∈ Rl×DI with l feature maps of di-                    9:       Mark indices as occupied:
+mension DI . We used Densenet-121 [14] as M , because                         OV ← OV ∪ {i} ; OF ← OF ∪ {j}
+it outperformed ViT and Resnet-50 in preliminary experi-            10:    end if
+ments. The set of learnable latent tokens Q = [q1 , . . . , qNQ ]   11:    break if |PM | = min(NQ , NS )
+where ql ∈ RDQ , interact with the image encoder fea-               12: end for
+tures A to extract a set of image-informed multi-view em-
+beddings EI (Q, I) = V , where V = [v1 , . . . , vNQ ] with
+                                                                                        Lij = hi cTi cj hj .                  (2)
+                                                                     The DPP for a selected subset C ′ is given by:
+
+                                                                                     PL (C ′ ) ∝ det(LC ′ ),                  (3)
+Figure 4. Juxtaposition of 8 query tokens from Q-Former (upper        In our case C = C ′ , as we consider repulsion between
+row) and the same 8 tokens from brat (lower row). The collapsed
+                                                                  all image tokens. det(LC ) can be decomposed as follows:
+Q-Former queries all attend to the same image regions, whereas
+the multi-view embeddings of brat focus on distinct features.                                  Y
+                                                                                                     !
+                                                                                                   2
+                                                                                det(LC ) =        hi det(SC ),           (4)
+Quality-Diversity via DPPs Empirically, we find that                                           i∈C
+PVA alone does not sufficiently encourage diverse features           where SC is the similarity matrix between all attention
+in multi-view embeddings. To address this, we adopt ideas         maps ci .
+from quality-diversity (QD). The idea behind QD is to have           The determinant of the kernel matrix LC corresponds to
+many diverse solutions to tackle a problem from different         the squared volume of the parallelepiped spanned by the
+angles. This fits our problem well, as we want the different      vectors  hi ci for each i in C. By maximizing the product
+multi-view embeddings to focus on different features of the       Q
+                                                                         h2
+                                                                    i∈C i , we encourage each embedding token to have high
+image. We consider as feature diversity the diversity of the      entropy, corresponding to a large magnitude in the feature
+attention maps over the image feature maps A of the multi-        space. By maximizing the determinant det(SC ), where SC
+view embeddings V .                                               captures the pairwise similarities between attention maps,
+   Pairwise dissimilarity measures, e.g., used in Zhang et al.    we ensure that the directions ci are as different as possible,
+[50], enforce local repulsion between embeddings but may          promoting diversity among the tokens. This approach nat-
+result in trivial solutions. In contrast, DPPs explicitly model   urally prevents the embeddings from collapsing into a sin-
+global diversity by maximizing the volume spanned by em-          gle representation by encouraging both high quality (non-
+beddings collectively, thus avoiding trivial solutions and en-    collapsed attention) and diverse (distinct attention patterns)
+couraging each embedding to capture distinct aspects of the       embeddings.
+feature space [25]. In addition, DPPs allow the seamless in-         In practice, we define the DPP loss by taking the negative
+tegration of a quality heuristic. Figure 13 and 14 in the Ap-     log-determinant of the kernel matrix L
+pendix illustrate how DPPs promote a more desirable fea-
+ture diversity than pairwise repulsion. The results in Table 2                   LDPP = − log det(LC + ϵI),                   (5)
+empirically validate the superiority of DPPs.
+   DPPs are distributions over subsets of a fixed ground set         where ϵI is a small diagonal matrix added for numerical
+that attribute higher probability to sets that are diverse. In    stability.
+our case, we want to maximize the probability of our set
+of multi-view embeddings V under the DPP. We consider             Loss Calculation To obtain the overall image-report sim-
+quality-diversity with respect to the cross-attention maps        ilarity, we aggregate the multi-view embedding sentence
+C = [c1 , . . . , cNQ ] where cj contains the flattened atten-    similarities by mean-averaging:
+tion values from multi-view embedding vj to the 3D feature
+                                                                                               1       X
+maps representing the image. As quality of each embedding                  SR,I = SI,R =                        Sv,f [i, j]   (6)
+token we use Shannon entropy of its cross-attention map,                                     |PM |
+                                                                                                     (i,j)∈PM
+denoted as hi ∈ R+ :
+                                 X                                   As such, we get our contrastive losses as follows:
+              hi = H(ci ) = −        ci (k) log ci (k),     (1)                                                  
+                                                                              (I|R)              exp(SI,R /τ )
+                               k                                           L        = − log   P                               (7)
+                                                                                                k exp(SI,Rk /τ )
+    where k indexes over spatial positions. In this con-                                                          
+text, we interpret high entropy as high information capac-                   (R|I)               exp(SR,I /τ )
+                                                                           L        = − log P                                 (8)
+ity: it encourages the embedding to capture broader, region-                                    m exp(SR,Im /τ )
+level semantic features rather than collapsing into a trivial,
+                                                                     We also use the same “Image-grounded Text Genera-
+single-voxel representation. This ensures that the diversity
+                                                                  tion” (ITG) loss as in BLIP-2 [26], as we found it to help
+term acts on meaningful feature regions rather than disjoint
+                                                                  performance. Our final loss is thus given as:
+pixels. The attention maps ci themselves are considered as
+the diversity features. The DPP kernel matrix Lij can be                          L(I|R) + L(R|I)
+written as:                                                                  L=                   + LDPP + LITG               (9)
+                                                                                         2
+3.3. brat as a Foundation Model                                            positive finding (around 90% of our original dataset) were
+                                                                           included in the evaluation, as negative reports usually ap-
+Our brat framework provides both a pre-trained vision back-
+                                                                           ply to all negative images, making exact matching a faulty
+bone M and a model EI (Q, I) for extracting multi-view
+                                                                           metric. As shown in Table 2, except mean rank, brat sets
+embeddings. We refer to brat-viz for the vision backbone
+                                                                           the benchmark on all metrics. The lower mean rank can
+only, and brat for multi-view framework.
+                                                                           generally be explained by the model making higher con-
+   Figure 5 illustrates how the brat weights can be modular-
+                                                                           fidence predictions, and this can be adjusted by selecting
+ized for different downstream tasks. Different task-specific
+                                                                           the weights at earlier training steps or by average pool-
+heads, such as an MLP for classification, a language model
+                                                                           ing the multi-view embeddings at inference instead of us-
+for report generation, or a segmentation decoder, can ap-
+                                                                           ing the PVA algorithm. The QD component improved per-
+pended to either brat or brat-viz. Experiments on different
+                                                                           formance, suggesting reliance of PVA on QD for effective
+such configurations are provided in the next section.
+                                                                           learning. Q-Former alone did not show benefits with QD
+                                                                           repulsion, suggesting that QD is only effective when query
+                                                                           tokens are also encouraged to be aligned with diverse clin-
+                                                                           ical features. We also empirically validate the superiority
+       CLS Head                   LLM                 Segmentation         of DPPs over simple pairwise repulsion. Our approach also
+                                 Decoder                Decoder            outperforms the Colbert algorithm for matching multi-view
+                                             …                             embeddings. Qualitative examples of images and corre-
+   MRI Feat.
+                  Cross-attention MRI Image Encoder
+                                                           MRI Feat.       sponding reports retrieved by brat are shown in Figure 6.
+   Extractor                                               Extractor
+
+                                      …
+                                                                           BIMCV-R To demonstrate the generalizability of our
+brat                                                            brat-viz
+                                                                           framework, we also pre-trained it from scratch on the
+Figure 5. We connect two configurations of brat with various de-           BIMCV-R dataset, a publicly available dataset of lung CT
+coders to evaluate our pre-training on downstream tasks.                   scans paired with radiology reports [9]. Similar to the orig-
+                                                                           inal paper, we find that conventional contrastive loss ap-
+                                                                           proaches such as a basic Q-Former or CLIP perform very
+4. Experiments and Results                                                 poorly (see Table 3). Notably, without the need for ad-
+This paper presents a new VLP method for 3D medi-                          ditional SSL techniques used by MedFinder, brat achieves
+cal scans and document-length reports. In this section,                    comparable performance purely by leveraging textual su-
+we demonstrate the benefits of brat over other pre-training                pervision. We also identify certain quality issues within
+methods, both in terms of pre-training metrics and on down-                the BIMCV-R dataset, detailed in Appendix 8.3, which
+stream tasks, including tumor and metastases segmentation,                 may contribute to the generally lower performance observed
+Alzheimer’s classification, and report generation.                         on this benchmark. Despite these limitations, our results
+                                                                           show that brat can be effectively applied off-the-shelf to
+4.1. VLP Performance: Image-Text Retrieval                                 other medical imaging modalities with complex visuals and
+We evaluated brat on image-text retrieval tasks on both                    lengthy reports. We note a greater discrepancy in mean rank
+MSKBrain, and BIMCV-R [9], an external public bench-                       on BIMCV-R, but limited methodological details in prior
+mark of lung CTs and corresponding reports. We computed                    work and unavailable model weights make direct compari-
+key retrieval metrics such as recall@k and mean and median                 son difficult, leaving this to further examination.
+rank. For MSKBrain, we computed finding-based metrics,
+                                                                           4.2. Downstream Tasks
+where “P@5 (F)” corresponds to how frequently each of
+the 5 retrieved samples contain at least one common pos-                   In this section, we showcase how our pre-training is benefi-
+itive finding (F) with the ground-truth match. “R@5 (F)”                   cial for a wide range of downstream tasks.
+corresponds to the frequency of finding at least one sample
+                                                                           Brain MRI Report Generation. VLP naturally suits ra-
+containing exactly the same labels as the ground-truth in the
+                                                                           diology report generation, as the visual embeddings al-
+top-5 samples.
+                                                                           ready align with text features. We evaluated our pre-trained
+MSKBrain We evaluated brat against multiple baselines:                     backbones by freezing the vision backbone and assessed
+CLIP, Q-Former (the base of brat), brat with the traditional               how well a language model extracted image-grounded in-
+Colbert matching algorithm [22] instead of PVA, brat with-                 formation. We used Llama-3.2-1B [12], providing either
+out QD, brat with simple pairwise repulsion as used in [50]                multi-view embeddings or image feature maps to the LLM
+instead of DPPs, and a Q-Former with QD. Results with                      via a bridging MLP. Training and evaluation were done
+ViT and ResNet-50 backbone models are provided for com-                    on MSKBrain. We computed both LLM-based metrics
+pleteness. For simplicity, only MRIs that have at least one                (GREEN metric [33]) and natural language generation met-
+ Methods                                   Text to Image                                                         Image to Text
+                 R@1 ↑   R@5 ↑    R@10 ↑   R@5 (F) ↑       P@5 (F) ↑   MdR ↓   MnR ↓    R@1 ↑   R@5 ↑   R@10 ↑    R@5 (F) ↑      P@5 (F) ↑   MdR ↓    MnR ↓
+ CLIP            0.146   0.407     0.564     0.894           0.718       8.0     35.8   0.159   0.431   0.569       0.853          0.748       8.0     37.2
+ QFormer         0.154   0.377     0.529     0.867           0.672      10.0     32.5   0.146   0.368   0.532       0.837          0.703      9.0      34.9
+ Colbert         0.125   0.370     0.509     0.889           0.680      10.0     31.9   0.113   0.326   0.487       0.810          0.732      11.0     36.0
+ brat w/o QD     0.173   0.458     0.615     0.894           0.711       6.0     37.3   0.171   0.449   0.606       0.875          0.745       7.0     34.5
+ brat w/ PR      0.099   0.349     0.497     0.875           0.723      11.0     36.6   0.109   0.328   0.478       0.818          0.696      11.0     39.2
+ QFormer w/ QD   0.155   0.370     0.542     0.851           0.701      10.0     34.8   0.152   0.381   0.529       0.817          0.699      10.0     33.6
+ brat            0.205   0.493     0.666     0.911           0.718       6.0    124.1   0.201   0.481   0.645       0.882          0.752      6.0      96.3
+ brat vit        0.015   0.066     0.117     0.661           0.410     385.0    404.6   0.016   0.066   0.129       0.604          0.473     357.0    401.0
+ brat resnet     0.095   0.292     0.436     0.843           0.654      13.0    109.4   0.131   0.343   0.462       0.809          0.640      12.0     62.0
+
+
+Table 2. Evaluation results for text-to-image and image-to-text retrieval on MSKBrain. For the “↑” metrics higher is better and for the “↓”
+metrics lower is better. “R@5 (finding)” and “P@5 (finding)” indicate the recall and precision at 5 for the finding task.
+
+ Methods                                             Text to Image                                                Image to Text
+                                 R@1 ↑     R@5 ↑           R@10 ↑       MdR ↓       MnR ↓       R@1 ↑    R@5 ↑        R@10 ↑          MdR ↓          MnR ↓
+ CLIP4clip [21]                  0.003      0.015           0.022       717.0       735.9       0.003     0.008        0.015           722.0         738.7
+ 3D-MIR [1]                      0.011      0.047           0.103       121.1       152.3       0.012     0.040        0.088           134.9         162.4
+ MedFinder (Resnet-50)           0.028      0.087           0.203        68.9        81.3       0.029     0.088        0.197            71.2          80.7
+ MedFinder (ViT-base)            0.027      0.089           0.214        75.4        80.1       0.027     0.090        0.203            72.3          81.9
+ Q-Former                        0.007      0.025           0.048       223.0       371.7       0.000     0.015        0.034           225.0         365.8
+ brat                            0.030      0.109           0.165        71.0       283.0       0.036     0.103        0.182           67.0          282.0
+
+Table 3. Evaluation results for text-to-image and image-to-text retrieval on BIMCV-R, a lung CT dataset. The compared results, except
+Q-Former, are taken from Chen et al. [9]. It’s unclear how the median ranks happened to be reported as non discrete values.
+
+
+rics. We compared brat to training from scratch, Q-Former                        the Appendix contains more extensive results, which shows
+pre-training, and classification-based pre-training (“CLS”),                     that our pre-training approach led to consistently accurate
+using either the vision backbone or multi-view embeddings                        performance across all analyzed settings. VLP, in general,
+as LLM input. CLS training was done via the labels we ex-                        produced clear performance improvements over classifica-
+tracted from our reports using the methodology described in                      tion pre-training. These results underline the usefulness of
+Appendix 6.2. As shown in Table 4, VLP improved over no                          brat across non-cancer domains.
+pre-training or classification pre-training. brat also leads to
+additional improvements over simple QFormer pre-training.
+This is the first work to provide report generation capa-                        Segmentation Tasks. We also evaluated brat on one of the
+bilities for brain MRIs that were trained on a large-scale                       most common downstream applications in brain MRI analy-
+dataset. Our results demonstrate that the ability of VLMs to                     sis: tumor segmentation. We used BraTS2021 [2], contain-
+generate reports for brain MRIs is in line with other radio-                     ing gliomas, and BraTS2023-METS [29], containing brain
+graphic modalities, such as chest X-rays. Example reports                        metastases. In order to isolate the benefit of the brat pre-
+are shown in Figure 16.                                                          training framework, we only used T1W MRI and did not
+                                                                                 include some of the post-processing steps typically included
+Alzheimer Classification. To investigate whether our                             for these datasets. We employed 4-fold cross-validation fol-
+pre-training generalizes to non-cancer-focused brain MRI                         lowing conventional methods [17]. In addition, three ran-
+datasets, we evaluated brat on ADNI [34], a dataset for                          dom seeds were used for each run to obtain confidence inter-
+investigating the progression of Alzheimer’s disease. We                         vals. Benchmark relevant evaluation metrics including the
+split the cohort into training (n=1,932), validation (n=384),                    Dice (Brats2021) and lesion-wise Dice (Brats2023) were
+and hold-out test (n=291) sets. Brain MRIs are either                            computed from three overlapping regions, namely whole tu-
+“cognitive normal”, “mild cognitive impairment” (MCI), or                        mor, tumor core, and enhancing tumor. Figure 8 shows that
+“Alzheimer’s disease”. Figure 7 shows the performance on                         our pre-training improves performance for the metastases,
+binary classification (Normal or Alz.) for 1, 10, and 100%                       but not for the gliomas. Of note, tumor core is easily sepa-
+training data. As results on ADNI vary significantly based                       rated from its background due to higher soft-tissue contrast,
+on random seeds and selected subsets of the training data,                       and can be identifed even by non-expert obviating the need
+we launched 10 runs for each setting and bootstrap from                          for precise anatomical understanding of brain MRIs. More
+these results to obtain 95% confidence intervals. Table 7 in                     detailed results are provided in Appendix Table 8 and 9.
+ Backbone                Pre-training               LLM                                           GREEN (LLM Eval)                                                                         NLG Metrics
+                                                                                    All        FP          FN        Location         Severity    METEOR             CIDEr        Rouge-L           Bleu-1      Bleu-2         Bleu-3         Bleu-4
+ Densenet-121            None                       Llama 3.2-1B                  0.300       0.110      0.190         0.750            0.850        0.117           0.039           0.180          0.177        0.103          0.065          0.042
+ Densenet-121 (fr.)      Classification             Llama 3.2-1B                  0.310       0.115      0.195         0.760            0.860        0.102           0.049           0.187          0.124        0.072          0.048          0.033
+ Densenet-121 (fr.)      QFormer                    Llama 3.2-1B                  0.375       0.138      0.287         0.840            0.911        0.131           0.079           0.216          0.201        0.123          0.081          0.056
+ Densenet-121 (fr.)      brat                       Llama 3.2-1B                  0.390       0.150      0.300         0.860            0.920        0.134           0.098           0.214          0.241        0.142          0.091          0.061
+ QFormer (fr.)           QFormer                    Llama 3.2-1B                  0.360       0.130      0.280         0.820            0.900        0.125           0.105           0.210          0.190        0.115          0.078          0.053
+ QFormer (fr.)           brat                       Llama 3.2-1B                  0.402       0.172      0.318         0.852            0.917        0.128           0.114           0.219          0.197        0.121          0.081          0.056
+
+
+Table 4. The backbone is always frozen, except for “None” pre-training. The GREEN metric is obtained using a 7B parameter LLM.
+Four GREEN scores, relating to false findings (FP), missing findings (FN), false findings (FP), and accuracy of severity and location
+specification of findings are provided. Two additional metrics used in GREEN, missing or hallucinated references to prior scans are
+omitted as we removed these references from our dataset and therefore our models all score a 100% on these metrics.
+
+                                                        top-1                                                     top-2                                               top-3                                                  top-4
+
+                              there are multiple subcentimeter enhancing lesions within                                                          sella : the sellar region does not show any
+                              the bilateral cerebellar hemispheres, with dimensions                                                              suprasellar mass or pituitary macroadenoma.          subcentimeter focus of cavitary
+                              ranging from 0. 2 - 0. 3 cm, which are suspicious for           patchy white matter changes are                    the infundibulum appears normal in                   alteration within the posterior limb of
+                              metastatic deposits ( series 11 image 9, series 10 image 8 -    likely related to chronic                          thickness. there is subtle hypoenhancement           the left internal capsule likely represents
+                              10 ). adjacent to the right parietal bone, there is minor
+                              ventral epidural enhancement. a punctate focus of               microvascular ischemia. no                         along the inferior left aspect of the pituitary,     a chronic lacunar infarct. tiny focus of
+                              enhancement in the left parietal lobe, with associated                                                             which may be artifactual or potentially
+                              linear enhancement, is suggestive of an infarct ( series 9
+                                                                                              evidence of acute infarction,                      indicative of a microadenoma. no acute
+                                                                                                                                                                                                      subcortical signal alteration within the
+                              image 12 ). the ventricles are stable in appearance. there is   hydrocephalus, or enhancing                        hemorrhage, hydrocephalus, acute infarction,         anterior left frontal lobe is nonspecific
+                              no evidence of acute intracranial hemorrhage or                                                                                                                         but may be related to chronic
+                              hydrocephalus. patchy foci of t1 signal intensity within the
+                                                                                              parenchymal mass lesions. there are                extra - axial fluid collection, or suspicious
+                              cerebral white matter are noted, likely representing            no extra - axial collections on the t1             intracranial enhancement is evident. several         microvascular ischemia. no evidence of
+                              chronic microvascular ischemic changes. there is no                                                                nonspecific subcentimeter hyperintensities are       hydrocephalus or enhancing
+                              appreciable mass effect or midline shift. no extra - axial      - weighted post - contrast images.                 observed in the cerebral white matter on the
+                              fluid collections are identified.                                                                                                                                       parenchymal mass lesions.
+                                                                                                                                                 t1 - weighted post - contrast images.
+
+
+                                                                                              postoperative changes are noted                                                                         postoperative changes are evident status post
+                                                                                                                                                 right temporal occipital junction craniotomy
+                              right parietal postoperative                                                                                                                                            right frontoparietal craniotomy. there is a small ill
+                                                                                              within the posteroinferior parietal                with an associated resection cavity is noted.        - defined area of heterogeneous enhancement in
+                              changes with ex vacuo                                           lobe extending caudally into the                   there is residual enhancement along the              the right frontoparietal region along the
+                                                                                                                                                 posterior aspect of the resection cavity, likely
+                              enlargement of the adjacent                                     supralateral occipital lobe.                       representing postoperative changes.
+                                                                                                                                                                                                      contracted resection cavity. surrounding t2 signal
+                                                                                                                                                                                                      hyperintensity is noted. additional areas of patchy
+                              ventricular system are noted.                                   surrounding t2 prolongation is                     surrounding t2 flair signal hyperintensity is        and confluent t2 signal hyperintensity are present
+                                                                                              observed. enhancement within the                   present. there are no areas of abnormal              in the subcortical and periventricular white
+                              linear enhancement is present at                                                                                                                                        matter, right greater than left. no suspiciously
+                                                                                                                                                 enhancement or discontiguous t2 flair signal
+                              the operative bed. there are no                                 surgical cavity is present. there is               abnormality. no evidence of hydrocephalus,           enhancing lesions are identified in the brain.
+                              mass lesions, hydrocephalus, or                                 no evidence of enhancing mass                      acute infarction, or acute hemorrhage is seen.       there is no evidence of acute infarction or acute
+                                                                                                                                                                                                      intracranial hemorrhage. the ventricles are
+                                                                                              lesions or hydrocephalus on the t1 -               diffusion - weighted imaging shows no
+                              acute infarction.                                                                                                  evidence of acute infarct.
+                                                                                                                                                                                                      slightly prominent. a left parietotemporal
+                                                                                              weighted post - contrast images.                                                                        developmental venous anomaly is present.
+
+
+
+Figure 6. Qualitativeon   t1 - weighted post - contrast mri of the
+                       examples
+                      brain,  there are noshowing
+                                           abnormally enhancing
+                                                                       the available imaging consists of a t1 -
+                                                         the top-4 output         of -our
+                                                                       weighted post          brat
+                                                                                         contrast mri model
+                                                                                                      of the brain.for
+                                                                                                                    the image-to-text     retrieval
+                                                                                                                           on the t1 - weighted  post -on
+                                                                                                                                                                  on t1
+                                                                                                                                                           a reduced
+                                                                                                                                                        contrast
+                                                                                                                                                                        - weighted
+                                                                                                                                                                      dev   set ofpost315- contrast
+                                                                                                                                                                                            examples.mri of
+                                                                       ventricles are slightly prominent. there are no                                            the brain, there is no evidence of an
+On this subset the median rank achieved was 2. Enboxed
+                      lesions  within  the brain parenchyma,                             examples are correct. Green (and underlined) sections
+                                                                       enhancing brain lesions or significant mass
+                                                                                                                           mri of the brain, there are no                  aremass,
+                                                                                                                                                                  intracranial   passages      thatorare
+                                                                                                                                                                                      acute infarct,
+                      leptomeninges, or dura. mild diffuse                                                                 abnormally enhancing lesions
+clinically correct, even    though
+                      parenchymal        theylossare
+                                      volume            from
+                                                   is noted alonga different     MRI.scattered
+                                                                       effect. extensive    In red      are passages within
+                                                                                                   patchy
+                                                                       hyperintense signal white matter lesions are
+                                                                                                                            that don’t    correspond
+                                                                                                                                  the brain  parenchyma, to the MRI.
+                                                                                                                                                                  hemorrhage. there is no extra - axial
+                              with mild periventricular and scattered                                                                                                                                 fluid collection. the ventricles and
+                              subcortical and deep white matter changes,
+                                                                                              noted in the periventricular and subcortical       leptomeninges, or dura. there is
+                                                                                              white matter, which may correspond to areas                                                             sulci appear normal. there is no
+                              which are consistent with the patient's age.                                                                       mild diffuse parenchymal volume
+                                                                                              of ill - defined subtle low density on the prior                                                        herniation. scattered nonspecific
+                              there is no evidence of hydrocephalus. the                      ct scan. there is no evidence of acute             loss. no evidence of hydrocephalus
+                                                                                                                                                                                                      hyperintensities may be appreciated,
+                              orbital soft tissues and cavernous sinus                        intracranial hemorrhage, infarct, or extra -       is observed. the orbital soft tissues
+                              appear unremarkable without any focal                           axial collection. there is no midline shift or
+                                                                                                                                                                                                      which could suggest mild chronic
+                                                                                                                                                 and cavernous sinus appear normal.
+                              lesions.                                                        downward herniation.                                                                                    microvascular ischemic changes.
+
+
+
+
+                                                                                                                                     Figure 8. Comparison of brat pre-training to scratch training for tu-
+                                                                                                                                     mor (left) and metastases (right) segmentation on BraTS2021 and
+                                                                                                                                     BraTS2023. Scores are averaged across the three tumor regions.
+Figure 7. Comparison of brat pre-training to alternative pre-
+training methods for Alzheimer’s disease classification on ADNI.
+
+                                                                                                                                     applied to images paired with long reports, including both
+5. Conclusion                                                                                                                        brain MRI and lung CT datasets. The proposed brat frame-
+                                                                                                                                     work is architecture-agnostic and compatible with a variety
+We present a large-scale dataset and introduce two ideas                                                                             of image and text encoders. The flexibility of the learnable
+novel to vision-language representation learning: multi-                                                                             multi-view embeddings also naturally allows to extend the
+view embeddings, enabled via the PVA algorithm, and                                                                                  input beyond imaging data. This is promising for medical
+DPPs to maximize the quality-diversity of these embed-                                                                               imaging, where patient context and lab results influence di-
+dings. Our approach demonstrates promising results when                                                                              agnosis.
+References                                                                 et al. The llama 3 herd of models. arXiv preprint
+                                                                           arXiv:2407.21783, 2024. 6, 3
+ [1] Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine
+                                                                      [13] Kaiming He, Xinlei Chen, Saining Xie, Yanghao Li, Piotr
+     Miech, Iain Barr, Yana Hasson, Karel Lenc, Arthur Mensch,
+                                                                           Dollár, and Ross Girshick. Masked autoencoders are scalable
+     Katherine Millican, Malcolm Reynolds, et al. Flamingo: a
+                                                                           vision learners. In Proceedings of the IEEE/CVF conference
+     visual language model for few-shot learning. In Advances in
+                                                                           on computer vision and pattern recognition, pages 16000–
+     Neural Information Processing Systems, 2022. 2
+                                                                           16009, 2022. 3
+ [2] Ujjwal Baid, Satyam Ghodasara, Suyash Mohan, Michel
+                                                                      [14] Gao Huang, Zhuang Liu, Laurens van der Maaten, and Kil-
+     Bilello, Evan Calabrese, Errol Colak, Keyvan Farahani,
+                                                                           ian Q. Weinberger. Densely connected convolutional net-
+     Jayashree Kalpathy-Cramer, Felipe C Kitamura, Sarthak
+                                                                           works. In Proceedings of the IEEE/CVF Conference on
+     Pati, et al. The rsna-asnr-miccai brats 2021 benchmark on
+                                                                           Computer Vision and Pattern Recognition, 2017. 4
+     brain tumor segmentation and radiogenomic classification.
+                                                                      [15] Shih-Cheng Huang, Liyue Shen, Matthew P Lungren, and
+     arXiv preprint arXiv:2107.02314, 2021. 3, 7
+                                                                           Serena Yeung. Gloria: A multimodal global-local represen-
+ [3] Hangbo Bao, Li Dong, Songhao Piao, and Furu Wei. BEiT:
+                                                                           tation learning framework for label-efficient medical image
+     BERT pre-training of image transformers. In International
+                                                                           recognition. In Proceedings of the IEEE/CVF International
+     Conference on Learning Representations, 2022. 3
+                                                                           Conference on Computer Vision, 2021. 1, 2
+ [4] Adrien Bardes, Jean Ponce, and Yann LeCun.                 Vi-   [16] Jeremy Irvin, Pranav Rajpurkar, Michael Ko, Yifan Yu, Sil-
+     creg: Variance-invariance-covariance regularization for self-         viana Ciurea-Ilcus, Chris Chute, Henrik Marklund, Behzad
+     supervised learning. In 10th International Conference on              Haghgoo, Robyn Ball, Katie Shpanskaya, et al. Chexpert:
+     Learning Representations, ICLR 2022, 2022. 3                          A large chest radiograph dataset with uncertainty labels and
+ [5] Aurelia Bustos, Antonio Pertusa, Jose-Maria Salinas, and              expert comparison. In Proceedings of the AAAI conference
+     Maria de la Iglesia-Vayá. PadChest: A large chest x-ray              on artificial intelligence, 2019. 2
+     image dataset with multi-label annotated reports. Medical        [17] Fabian Isensee, Tassilo Wald, Constantin Ulrich, Michael
+     Image Analysis, 2020. 2                                               Baumgartner, Saikat Roy, Klaus Maier-Hein, and Paul F
+ [6] Vinod Kumar Chauhan, Anshul Thakur, Odhran                            Jaeger. nnu-net revisited: A call for rigorous validation in
+     O’Donoghue, Omid Rohanian, Soheila Molaei, and                        3d medical image segmentation. In International Confer-
+     David A Clifton. Continuous patient state attention model             ence on Medical Image Computing and Computer-Assisted
+     for addressing irregularity in electronic health records. BMC         Intervention, 2024. 7
+     Medical Informatics and Decision Making, 2024. 4                 [18] Andrew Jaegle, Felix Gimeno, Andy Brock, Oriol Vinyals,
+ [7] Ting Chen, Simon Kornblith, Mohammad Norouzi, and Ge-                 Andrew Zisserman, and Joao Carreira. Perceiver: General
+     offrey Hinton. A simple framework for contrastive learn-              perception with iterative attention. In International Confer-
+     ing of visual representations. In International Conference on         ence on Machine Learning, 2021. 2
+     Machine Learning, 2020. 3                                        [19] Jue Jiang, Neelam Tyagi, Kathryn Tringale, Christopher
+ [8] Xi Chen, Xiao Wang, Soravit Changpinyo, AJ Piergiovanni,              Crane, and Harini Veeraraghavan.           Self-supervised 3d
+     Piotr Padlewski, Daniel Salz, Sebastian Goodman, Adam                 anatomy segmentation using self-distilled masked image
+     Grycner, Basil Mustafa, Lucas Beyer, et al. Pali: A jointly-          transformer (smit). In International Conference on Medi-
+     scaled multilingual language-image model. In International            cal Image Computing and Computer-Assisted Intervention,
+     Conference on Learning Representations, 2023. 2                       pages 556–566. Springer, 2022. 3
+ [9] Yinda Chen, Che Liu, Xiaoyu Liu, Rossella Arcucci, and           [20] Alistair EW Johnson, Tom J Pollard, Seth J Berkowitz,
+     Zhiwei Xiong. Bimcv-r: A landmark dataset for 3d ct text-             Nathaniel R Greenbaum, Matthew P Lungren, Chih-ying
+     image retrieval. In International Conference on Medical Im-           Deng, Roger G Mark, and Steven Horng. Mimic-cxr, a de-
+     age Computing and Computer-Assisted Intervention, 2024.               identified publicly available database of chest radiographs
+     2, 6, 7                                                               with free-text reports. Scientific data, 2019. 2
+[10] Mehdi Cherti, Romain Beaumont, Ross Wightman, Mitchell           [21] Vladimir Karpukhin, Barlas Oguz, Sewon Min, Patrick
+     Wortsman, Gabriel Ilharco, Cade Gordon, Christoph Schuh-              Lewis, Ledell Wu, Sergey Edunov, Danqi Chen, and Wen-
+     mann, Ludwig Schmidt, and Jenia Jitsev. Reproducible scal-            tau Yih. Dense passage retrieval for open-domain question
+     ing laws for contrastive language-image learning. In Pro-             answering. In Proceedings of the 2020 Conference on Em-
+     ceedings of the IEEE/CVF Conference on Computer Vision                pirical Methods in Natural Language Processing (EMNLP),
+     and Pattern Recognition, 2023. 2                                      2020. 2
+[11] Kevin Clark, Urvashi Khandelwal, Omer Levy, and Christo-         [22] Omar Khattab and Matei Zaharia. Colbert: Efficient and
+     pher D. Manning. What does BERT look at? an analysis of               effective passage search via contextualized late interaction
+     BERT’s attention. In Proceedings of the 2019 ACL Workshop             over bert. In Proceedings of the 43rd International ACM SI-
+     BlackboxNLP: Analyzing and Interpreting Neural Networks               GIR conference on research and development in Information
+     for NLP, 2019. 2                                                      Retrieval, 2020. 2, 6
+[12] Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Ab-          [23] Aishik Konwer, Xiaoling Hu, Joseph Bae, Xuan Xu, Chao
+     hinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha                 Chen, and Prateek Prasanna. Enhancing modality-agnostic
+     Letman, Akhil Mathur, Alan Schelten, Alex Vaughan,                    representations via meta-learning for brain tumor segmenta-
+     tion. In Proceedings of the IEEE/CVF International Confer-        [35] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya
+     ence on Computer Vision, 2023. 3                                       Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry,
+[24] Olga Kovaleva, Alexey Romanov, Anna Rogers, and Anna                   Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learn-
+     Rumshisky. Revealing the dark secrets of bert. In Pro-                 ing transferable visual models from natural language super-
+     ceedings of the 2019 Conference on Empirical Methods                   vision. In International Conference on Machine Learning.
+     in Natural Language Processing and the 9th International               PMLR, 2021. 2
+     Joint Conference on Natural Language Processing (EMNLP-           [36] Keshav Santhanam, Omar Khattab, Jon Saad-Falcon,
+     IJCNLP), 2019. 2                                                       Christopher Potts, and Matei Zaharia. Colbertv2: Effec-
+[25] Alex Kulesza, Ben Taskar, et al. Determinantal point pro-              tive and efficient retrieval via lightweight late interaction. In
+     cesses for machine learning. Foundations and Trends® in                Proceedings of the 2022 Conference of the North American
+     Machine Learning, 2012. 2, 3, 5                                        Chapter of the Association for Computational Linguistics:
+[26] Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi.                 Human Language Technologies, 2022. 2
+     Blip-2: Bootstrapping language-image pre-training with            [37] Akanksha Saran, Safoora Yousefi, Akshay Krishnamurthy,
+     frozen image encoders and large language models. In In-                John Langford, and Jordan T Ash. Streaming active learning
+     ternational Conference on Machine Learning, 2023. 2, 4,                with deep neural networks. In International Conference on
+     5                                                                      Machine Learning, 2023. 3
+[27] Ping Li, Qinghao Ye, Luming Zhang, Li Yuan, Xianghua              [38] Piyush Sharma, Nan Ding, Sebastian Goodman, and Radu
+     Xu, and Ling Shao. Exploring global diverse attention via              Soricut. Conceptual captions: A cleaned, hypernymed, im-
+     pairwise temporal relation for video summarization. Pattern            age alt-text dataset for automatic image captioning. In Pro-
+     Recognition, 2021. 3                                                   ceedings of the 56th Annual Meeting of the Association for
+[28] Qianchu Liu, Stephanie Hyland, Shruthi Bannur, Kenza                   Computational Linguistics, 2018. 4
+     Bouzid, Daniel Castro, Maria Wetscherek, Robert                   [39] Quan Sun, Yuxin Fang, Ledell Wu, Xinlong Wang, and Yue
+     Tinn, Harshita Sharma, Fernando Pérez-Garcı́a, Anton                  Cao. Eva-clip: Improved training techniques for clip at scale.
+     Schwaighofer, et al. Exploring the boundaries of gpt-4                 arXiv preprint arXiv:2303.15389, 2023. 2
+     in radiology. In Proceedings of the 2023 Conference on            [40] Yucheng Tang, Dong Yang, Wenqi Li, Holger R Roth,
+     Empirical Methods in Natural Language Processing, 2023.                Bennett Landman, Daguang Xu, Vishwesh Nath, and Ali
+     3, 2                                                                   Hatamizadeh. Self-supervised pre-training of swin trans-
+[29] Ahmed W Moawad, Anastasia Janas, Ujjwal Baid, Divya                    formers for 3d medical image analysis. In Proceedings of
+     Ramakrishnan, Rachit Saluja, Nader Ashraf, Leon Jekel,                 the IEEE/CVF conference on computer vision and pattern
+     Raisa Amiruddin, Maruf Adewole, Jake Albrecht, et al.                  recognition, pages 20730–20740, 2022. 3
+     The brain tumor segmentation (brats-mets) challenge 2023:         [41] Pascal Vincent, Hugo Larochelle, Yoshua Bengio, and
+     Brain metastasis segmentation on pre-treatment mri. arXiv              Pierre-Antoine Manzagol. Extracting and composing robust
+     preprint arXiv:2306.00838, 2023. 3, 7                                  features with denoising autoencoders. In International Con-
+[30] Asbjørn Munk, Jakob Ambsdorf, Sebastian Llambias, and                  ference on Machine Learning, 2008. 3
+     Mads Nielsen. Amaes: Augmented masked autoencoder pre-            [42] Fuying Wang, Yuyin Zhou, Shujun Wang, Varut Vardhanab-
+     training on public brain mri data for 3d-native segmentation.          huti, and Lequan Yu. Multi-granularity cross-modal align-
+     arXiv preprint arXiv:2408.00640, 2024. 3                               ment for generalized medical visual representation learn-
+[31] Jianmo Ni, Chen Qu, Jing Lu, Zhuyun Dai, Gustavo Her-                  ing. In Advances in Neural Information Processing Systems,
+     nandez Abrego, Ji Ma, Vincent Zhao, Yi Luan, Keith Hall,               2022. 2
+     Ming-Wei Chang, et al. Large dual encoders are generaliz-         [43] Jianfeng Wang, Zhengyuan Yang, Xiaowei Hu, Linjie Li,
+     able retrievers. In Proceedings of the 2022 Conference on              Kevin Lin, Zhe Gan, Zicheng Liu, Ce Liu, and Lijuan Wang.
+     Empirical Methods in Natural Language Processing, 2022.                Git: A generative image-to-text transformer for vision and
+     2                                                                      language. Transactions on Machine Learning Research,
+[32] Mehdi Noroozi and Paolo Favaro. Unsupervised learning of               2022. 2
+     visual representations by solving jigsaw puzzles. In Euro-        [44] Rhydian Windsor, Amir Jamaludin, Timor Kadir, and An-
+     pean Conference on Computer Vision. Springer, 2016. 3                  drew Zisserman. Vision-language modelling for radiologi-
+[33] Sophie Ostmeier, Justin Xu, Zhihong Chen, Maya Varma,                  cal imaging and reports in the low data regime. In Medical
+     Louis Blankemeier, Christian Bluethgen, Arne Md, Michael               Imaging with Deep Learning, 2023. 2
+     Moseley, Curtis Langlotz, Akshay Chaudhari, et al. Green:         [45] Chaoyi Wu, Xiaoman Zhang, Ya Zhang, Yanfeng Wang,
+     Generative radiology report evaluation and error notation. In          and Weidi Xie. Medklip: Medical knowledge enhanced
+     Findings of the Association for Computational Linguistics:             language-image pre-training for x-ray diagnosis. In Proceed-
+     EMNLP 2024, pages 374–390, 2024. 6                                     ings of the IEEE/CVF International Conference on Com-
+[34] Ronald Carl Petersen, Paul S Aisen, Laurel A Beckett,                  puter Vision, 2023. 2
+     Michael C Donohue, Anthony Collins Gamst, Danielle J              [46] Wentian Xu, Matthew Moffat, Thalia Seale, Ziyun Liang,
+     Harvey, CR Jack Jr, William J Jagust, Leslie M Shaw,                   Felix Wagner, Daniel Whitehouse, David Menon, Virginia
+     Arthur W Toga, et al. Alzheimer’s disease neuroimaging                 Newcombe, Natalie Voets, Abhirup Banerjee, et al. Feasi-
+     initiative (adni) clinical characterization. Neurology, 2010. 7        bility and benefits of joint learning from mri databases with
+     different brain diseases and modalities for segmentation. In
+     Medical Imaging with Deep Learning, 2024. 3
+[47] Lin Yang, Shawn Xu, Andrew Sellergren, Timo Kohlberger,
+     Yuchen Zhou, Ira Ktena, Atilla Kiraly, Faruk Ahmed,
+     Farhad Hormozdiari, Tiam Jaroensri, et al. Advancing
+     multimodal medical capabilities of gemini. arXiv preprint
+     arXiv:2405.03162, 2024. 1, 2
+[48] Jure Zbontar, Li Jing, Ishan Misra, Yann LeCun, and
+     Stéphane Deny. Barlow twins: Self-supervised learning via
+     redundancy reduction. In International conference on ma-
+     chine learning, 2021. 3
+[49] Richard Zhang, Phillip Isola, and Alexei A Efros. Colorful
+     image colorization. In European Conference on Computer
+     Vision. Springer, 2016. 3
+[50] Shunyu Zhang, Yaobo Liang, Ming Gong, Daxin Jiang, and
+     Nan Duan. Multi-view document representation learning for
+     open-domain dense retrieval. In Proceedings of the 60th An-
+     nual Meeting of the Association for Computational Linguis-
+     tics (Volume 1: Long Papers), 2022. 1, 2, 3, 4, 5, 6
+[51] Xiaoman Zhang, Chaoyi Wu, Ya Zhang, Weidi Xie, and
+     Yanfeng Wang. Knowledge-enhanced visual-language pre-
+     training on chest radiology images. Nature Communications,
+     2023. 2
+[52] Yuhao Zhang, Hang Jiang, Yasuhide Miura, Christopher D
+     Manning, and Curtis P Langlotz. Contrastive learning of
+     medical visual representations from paired images and text.
+     In Machine Learning for Healthcare Conference, 2022. 2
+               brat : Aligned Multi-View Embeddings for Brain MRI Analysis
+                                              Supplementary Material
+6. Dataset Details
+                                                                     Again status post left-sided craniotomy with stable post-
+In this section, we discuss MSKBrain, the largest existing           operative changes and with slight increase in the hetero-
+dataset of brain MRIs and radiology reports.                         geneously enhancing mass lesion centred in the left tem-
+                                                                     poral lobe which now measures 7.5 x 4.8 cm on image
+                                                                     13 series 14 from 6.7 x 4.7 cm , though the enhancement
+6.1. Raw Dataset                                                     within it is more irregular and less intense than before .
+                                                                      The mass is not completely imaged on the perfusion seq-
+We collected the brain MRI scans and their corresponding
+clinical reports from a cancer center, covering the period           uence but there is hyperperfusion inferiorly within the
+from 2012 to 2017. These scans were primarily obtained to            nodular enhancing component which is incompletely de-
+monitor brain metastases and tumours in cancer patients, re-          monstrated . The surrounding hyperintense T2/FLAIR
+sulting in a dataset rich in positive findings (89.7% of scans       infiltrating nonenhancing signal abnormality is stable
+show abnormalities, an average of 134 words or 8 sentences           consistent with nonenhancing tumor/edema. No new
+per report) and representative of a diverse patient popula-          discontinuous suspiciously enhancing brain lesions.
+tion. We also collected the clinical reports corresponding to        There is slightly increased dilatation of the ventricles
+these images, as well as extensive demographic data, pri-            with slightly increased hyperintense T2/FLAIR signal
+mary diagnosis, ongoing chemotherapy and radiotherapy                in the periventricular white matter particularly about the
+treatments, and survival information, which will be utilized         frontal horns and atrium, suggesting transependymal
+in future studies.                                                   flow of CSF from a communicating hydrocephalus.
+                                                                     Stable mild midline shift to the right without significant
+    MRI sessions typically consist of multiple MRI modal-            downward herniation. No acute intracranial hemorrhage,
+ity scans (e.g. FLAIR, T2, etc.); however, in this first iter-       infarct, or new extra-axial collections.
+ation, we focus on T1-post contrast MRIs, the most infor-
+mative type of scan. To extract T1 post-contrast scans, we
+generated a long, clinician-validated list of keywords typi-     Figure 9. An example report showing references to prior scans in
+cally used to refer to these scans. The list contained over       blue and descriptions of findings not visible on T1 post-contrast
+50 expressions such as “Axial T1 post SENSE” or “Ax T1           scans in yellow .
+POST”. We removed around 3,000 sessions that did not in-
+clude T1 post-contrast imaging. DICOM medical images
+were converted and saved as 3D NIFTI files. We first sorted                        Prompt 1 (Report re-writing)
+and loaded the DICOM slices into a 3D array, and then,
+for each image stack, preserved relevant metadata, such as
+pixel spacing and slice thickness, in the affine matrix. To                        "There are innumerable new
+standardize the intensity values, we thresholded the images                        supratentorial and infra-
+                                                                                   tentorial ring-enhancing
+at the 99th percentile and rescaled them to a range of 0-800,                      metastases …"
+converting the final values to 16-bit integers. We saved the
+                                                                                   Prompt 2 (Structured report)
+processed 3D volumes as compressed NIFTI files (.nii.gz).
+We then connect the MRI sessions to patient data stored in
+a REDCap database. For each imaging session, we attached
+the patient’s demographic information and added calculated                         structured_report = {
+                                                                                      "cleaned_report": "...",
+fields like age and time to death. We then mapped treat-                              "List all the locations
+                                                                                       containing enhancing
+ments and diagnoses to imaging sessions by finding the                             lesions":
+                                                                                       "[Right upper lobe, ...]",
+closest diagnosis date and checking which medications and                             "...": "..."
+                                                                                   }
+radiation therapies were active at the time of imaging. We
+provide an overview of key patient data in Figure 11. The        Figure 10. The two-step GPT-4 based report processing pipeline.
+final dataset includes 77,228 brain MRI image-report pairs       Prompt 1 and 2 are in Figure 12 and 17, respectively.
+from 24,262 unique patients. To develop our model, we per-
+formed a patient-wise split of the data into 75,142 examples
+for training, 945 for development, and 1,141 for the test set.
+Figure 11. Participant demographics. Primary diagnoses refers to the primary cancer diagnosis for the patients for whomst the scan was
+ordered. Chemotherapy and radiotherapy types show a count of all the types of chemo/radio sessions assigned to the patients in this dataset.
+
+
+6.2. Text Processing                                                     well on radiology report processing [28], we developed an
+                                                                         on-premise GPT-4-based report processing pipeline. This
+As this paper focuses on learning image representations
+from brain MRIs, we had to ensure that all report content                pipeline enabled us to achieve three objectives without us-
+was visually grounded in the corresponding images. For ex-               ing expensive human annotators: the data was anonymized
+ample, keyword filtering revealed that 94% of reports make               by removing protected health information (PHI), the reports
+references to prior scans. Figure 9 contains an example                  were re-written to remove the aforementioned references,
+                                                                         and we extracted structured information. Through iterative
+report showing the two main types of information not de-
+                                                                         prompt engineering and radiologist feedback, we arrived at
+tectable from the image: references to prior scans and de-
+scription of findings not visible on T1 post-contrast images.            a 2-stage approach that extracted information from the re-
+                                                                         ports with a 96% accuracy on a gold standard set of 50 man-
+                                                                         ually annotated reports. This accuracy was calculated by
+    You are a highly experienced radiologist. Re-write the               counting the share of exact matches for all structured data
+    given brain MRI report and only modify the following:
+                                                                         points. By evaluating the second step of the two-step ap-
+                                                                         proach, we also implicitly ensure that the intermediate re-
+    (a) Leave out any details not visible on T1-weighted
+    post-contrast images. Note that T2/FLAIR hyperintensi-               written report captures all the relevant information from the
+    ties can often be seen on T1 Images. Observations related            original report.
+    to e.g. perfusion, plasma volume or K trans cannot be                    Annotating all the reports costs approximately $1,600,
+    seen and should be excluded.                                         which is significantly lower than the cost of expert anno-
+    (b) Leave out any terms that suggest temporal change or              tation. Figure 12 shows the report re-writing prompt and
+    progression (e.g. dates, “new”, “increased”, “previous”,             Figure 17 shows the information extraction prompt. Exam-
+    “now”, “compared to”, “since last”, “more”, “less”, etc.)            ple of this two-step processing are shown in Figures 20, 18,
+    (c) Remove any PHI.
+                                                                         and 19.
+                                                                             As there were around 80,000 long radiology reports, we
+Figure 12. The final prompt that was used to re-write the reports        used Python’s asyncio framework to process multiple re-
+and remove PHI and information not visible from the T1 post-             ports in parallel with GPT-4. Each report underwent two
+contrast images.                                                         API calls: one for re-writing and one for extracting struc-
+                                                                         tured information. We managed the API rate limits by pro-
+   Inspired by recent work demonstrating GPT-4 performs                  cessing reports in batches and including sleep time between
+batches. We also added a logit bias to avoid certain temporal           8.1. Pre-Training
+medical terms (e.g., “increase”, “new”) in the answer. The
+temperature was set to 0.0 and top p to 1.0 for determinis-             Training parameters were determined empirically, with the
+tic outputs. With parallelization, processing 80,000 reports            final set provided in Table 6. Contrary to the general as-
+took around 48 hours. GPT-4 performed significantly better              sumption that big batches lead to improved performance
+than GPT-3.5 during preliminary comparisons.                            for image-text contrastive learning, our results consistently
+                                                                        improved for comparitvely small batch sizes, in the range
+                                                                        of 25-32. This allowed us to train each model on a sin-
+7. Motivation for DPPs                                                  gle A/H100 GPU. Our experiments also found that the
+Figure 13 and 14 in the Appendix illustrate how DPPs pro-               Q-Former’s language modeling loss consistently improved
+mote a more desirable feature diversity than pairwise repul-            performance across nearly all configurations, while image-
+sion.                                                                   text matching did not yield benefits, leading us to omit
+                                                                        the image-text matching loss. We also found that using
+                                                                        a biomedically pre-trained BERT outperformed the stan-
+                                                                        dard BERT pre-training version in all evaluated scenar-
+                                                                        ios. All model weights were selected based on the best
+                                                                        average metrics on the development set. For MSKBrain,
+                                                                        all models were trained with the same image processing:
+                                                                        1mm × 1mm × 1mm voxel spacing, intensity normaliza-
+                                                                        tion, and resizing to 32 × 256 × 256. Preliminary analysis
+                                                                        on MSKBrain also showed lowered performance with stan-
+                                                                        dard data augmentation such as Gaussian noise, image rota-
+                                                                        tion and translation, as well as random view cropping, and
+Figure 13. Visualization of the volume spanned by four 3D vec-          was removed from subsequent analyses. We also explored
+tors under different configurations. In the left figure, both vectors   various text augmentation techniques. In “text dropout”, a
+are duplicates. In the middle one, one vector is a duplicate. The       given share of text tokens is randomly masked during the
+average pairwise cosine dissimilarity is the same for the left and      forward pass. In “sentence dropout”, different sentences,
+right figures, even though the right figure represents a much more
+                                                                        i.e., clinical features, are randomly removed from the re-
+desirable spread of the vectors. The DPP is much lower for that
+                                                                        ports. In “PVA dropout,” we randomly drop a given share
+figure thus minimizing the DPP is superior.
+                                                                        of paired multi-view embeddings and clinical features from
+                                                                        the overall similarity matrix. None of these techniques have
+                                                                        led to performance gains.
+
+
+                                                                        8.2. Downstream Tasks
+
+                                                                        We evaluated our pre-training methods by fine-tuning on
+                                                                        several downstream tasks. When feasible, our hyperparam-
+                                                                        eters were selected via grid search. The ADNI hyperpa-
+                                                                        rameter are given in Table 5. For ADNI, image prepro-
+                                                                        cessing was performed using Clinica’s t1-volume-tissue-
+Figure 14. Visualization of four 3D vectors under different config-     segmentation pipeline. For report generation, we follow the
+urations, representing attention maps over a 1 × 3 image. It shows      parameters chooses in the Llama paper [12]. We used a
+that pairwise cosine dissimilarity (“Cos”) equally rewards an even
+                                                                        batch size of 1024 and learning rate of 0.0002. We use an
+spread of attention maps (desired) and the embeddings grouping
+                                                                        AdamW optimizer with a cosine decay and a warm-up ra-
+into two clusters (not desired). In contrast, the DPP rewards the
+even spread the most.                                                   tio of 0.3. For segmentation, we used nnUNet as the base-
+                                                                        line model, fine-tuning it with an initial learning rate of
+                                                                        1e-2 and a weight decay of 3e-5. The training pipeline in-
+                                                                        cluded standard nnUNet pre-processing, data augmentation
+8. Implementation and Training Details                                  was not used. Result model weights were selected based on
+                                                                        the highest mean Dice score for BraTS-2021 and the best
+In this section, we discuss the implementation details of our           Lesion-Wise metrics for BraTS-2023-METS on the valida-
+pre-training and downstream evaluation. All code and mod-               tion set. All model weights were selected based on the best
+els will be made public.                                                average metrics on the development set.
+Parameter                      1%            10%              100%         9.2. Report Generation
+Batch Size                     16             32               32          Results in Table 4 show that, for the GREEN metric, we see
+Learning Rate               1.00E-06      1.00E-05*        1.00E-05*       sizeable gains from general vision-language pre-training
+Training Precision                        Bfloat16                         but no big difference between traditional Q-Former training
+Augmentation                  Yes             No                No         versus the brat framework. The GREEN metric provides
+Trained Layers              MLP Only          All               All        a structured clinical assessment by identifying key radiol-
+MLP size                                  2 layers                         ogy report errors derived from expert evaluations. How-
+                                                                           ever, it was developed mainly on chest X-ray reports, and
+Table 5. Implementation details of our Alzheimer classification            therefore, its applicability to out-of-distribution modalities
+downstream task. *For ViT we used 1.00E-06 across all data                 is limited. The authors evaluated their metric on an ab-
+amounts. Augmentation consisted of: random flipping, random                domen CT dataset and found a high absolute error (5.31). I
+intensity scaling, random intensity shifting, adding gaussian noise,       provide this metric as it can offer a rough assessment of the
+gaussian smoothing, random contrast adjustment, and random low             clinical correctness, however, it is likely not well suited to
+resolution simulation. More details can be found in our code.              assess minor performance differences in brain MRI reports.
+                                                                           An inspection of the generated evaluations by GREEN con-
+Parameter                    all models on MSKBrain      brat on BIMCV-R   firms that they contain many errors. A more dependable ap-
+Batch Size                              32                    25           proach would involve direct human evaluation or leveraging
+3D Vision Model M           Densenet-121/ViT/ResNet-50    Densenet-121     a stronger LLM such as GPT-4 for assessment.
+Weights Init. of M                              None
+Architecture of EI/R                        BERT-base2
+                                                                              Figure 16 shows examples of generated reports.
+Weights Init. of EI/R                      BiomedBERT3
+Learning Rate M                              5.00E-04*                     9.3. Segmentation
+Learning Rate EI/R                           5.00E-05
+Max. Text Length ER                             256                        Figure 8 and Figure 9 provide more detailed results on seg-
+NQ (# of Query Tokens)                           32                        mentation.
+Cross-Attention Frequency                         2
+Max. Number of Sentences                         20
+Training Precision                            Bfloat16
+Augmentation                                    None
+
+
+Table 6. Implementation details of our pre-training. Except for
+BIMCV-R , the batch size was chosen to be maximal given com-
+pute resources. *For ViT, we used a lower learning rate of 1.00E-
+07.
+
+
+
+8.3. BIMCV-R Dataset
+We found quality issues with the BIMCV-R dataset that
+may explain the overall lower performance obtained on this
+dataset compared to MSKBrain. Figure 15 shows how for
+some images the middle slice (depicted) is already no longer
+in the lung, suggesting that the scan mainly depicts other
+body parts. Several images also seem to depict localizer
+scans, which makes it difficult to connect them to radiol-
+ogy reports. Appropriate processing of these images would
+likely lead to significant performance improvements.
+
+9. Additional Results
+In this section, we provide more detailed results and exam-
+ples.
+
+9.1. Alzheimer’s Classification
+More detailed results for Alzheimer’s classification are pro-
+vided in Table 7.
+               Figure 15. BIMCV-R example images of localizer scans or where the middle slice is already in the abdomen or pelvis.
+
+
+
+
+        Pre-training Approaches                   1% Training Data (n=19)                            10% Training Data (n=193)                        100% Training Data (n=1,932)
+ Vision Model M        Weight Init.    Alz.   Normal       MCI              µ             Alz.    Normal       MCI              µ             Alz.    Normal       MCI              µ
+ Densenet-121          Random         0.523      0.513     0.527   0.521 [0.495, 0.547]   0.640      0.560     0.498   0.567 [0.535, 0.596]   0.724      0.629     0.535   0.629 [0.608, 0.649]
+                       CLS            0.514      0.517     0.511   0.514 [0.487, 0.538]   0.614      0.598     0.523   0.578 [0.555, 0.602]   0.720      0.628     0.556   0.635 [0.612, 0.650]
+                       Q-Former       0.565      0.525     0.486   0.526 [0.506, 0.547]   0.688      0.627     0.550   0.623 [0.604, 0.640]   0.747      0.662     0.581   0.663 [0.651, 0.681]
+                       brat           0.560      0.559     0.505   0.543 [0.497, 0.579]   0.720      0.644     0.518   0.628 [0.606, 0.653]   0.793      0.687     0.505   0.661 [0.650, 0.672]
+ ResNet-50             Random         0.497      0.566     0.541   0.535 [0.497, 0.569]   0.516      0.529     0.541   0.530 [0.498, 0.561]   0.590      0.525     0.528   0.548 [0.514, 0.586]
+                       brat           0.527      0.531     0.532   0.530 [0.500, 0.556]   0.621      0.456     0.452   0.510 [0.490, 0.532]   0.636      0.542     0.533   0.569 [0.519, 0.612]
+ ViT                   Random         0.517      0.485     0.473   0.492 [0.471, 0.512]   0.554      0.491     0.502   0.515 [0.495, 0.532]   0.528      0.473     0.515   0.505 [0.476, 0.533]
+                       brat           0.518      0.498     0.460   0.491 [0.458, 0.523]   0.607      0.555     0.467   0.543 [0.522, 0.561]   0.622      0.521     0.450   0.531 [0.513, 0.551]
+
+
+Table 7. Evaluation results (AUC scores) for different initialisations using 1%, 10%, and 100% of training data. “Alz.” stands for
+Alzheimer’s disease and “MCI” for mild cognitive impairment. The column µ is the average of the per-class AUC scores computed
+on the balanced test set; only this column displays the confidence interval.
+
+
+
+
+        Pre-training Approaches                   1% Training Data (n=12)                            10% Training Data (n=120)                        100% Training Data (n=1200)
+ Vision Model M        Weight Init.   Whole Tumor        Tumor Core   Enhanced Tumor      Whole Tumor        Tumor Core   Enhanced Tumor      Whole Tumor        Tumor Core   Enhanced Tumor
+ Densenet-121          Random            0.780             0.646            0.585            0.875             0.791           0.710             0.903             0.865            0.779
+ Densenet-121          brat              0.796             0.633            0.580            0.870             0.785           0.707             0.903             0.864            0.776
+
+
+Table 8. Segmentation performance (Dice scores) for different pre-training initialisations using 1%, 10%, and 100% of the training data.
+The values correspond to the Dice scores for the Whole Tumor, Tumor Core, and Enhanced Tumor regions.
+
+
+
+
+        Pre-training Approaches                   1% Training Data (n=12)                            10% Training Data (n=120)                        100% Training Data (n=1200)
+ Vision Model M        Weight Init.   Whole Tumor        Tumor Core   Enhanced Tumor      Whole Tumor        Tumor Core   Enhanced Tumor      Whole Tumor        Tumor Core   Enhanced Tumor
+ Densenet-121          Random            0.780             0.646            0.585            0.875             0.791           0.710             0.922             0.854            0.761
+ brat                  brat              0.796             0.633            0.580            0.870             0.785           0.707             0.925             0.867            0.762
+
+
+Table 9. Segmentation performance (Lesion-wise Dice scores) for different pre-training initialisations using 1%, 10%, and 100% of the
+training data. The values correspond to the lesion-wise Dice scores for the Whole Tumor, Tumor Core, and Enhanced Tumor regions.
+                                 An enhancing lesion approximately 0.5 cm in size is noted within the left caudate
+                                 nucleus, exhibiting minimal precontrast T1 hyperintensity without surrounding
+                                 edema. This finding is suggestive of a late subacute lacunar infarct or may be related
+                                 to vascular enhancement. There is no evidence of hydrocephalus, acute infarction, or
+                                 extra-axial collections.                                                    Ground-truth
+
+                                 The enhancing lesion within the left caudate head measures 0.6 cm. There are
+                                 no enhancing parenchymal, dural, or leptomeningeal lesions. No evidence of
+                                 hydrocephalus or acute infarction is present on the T1-weighted post-contrast
+                                 images.
+                                                                                                                                          Generated
+
+
+                                 Imaged with frameless stereotactic fiducial markers, the anterior cranial fossa floor meningioma
+                                 measures 4 x 3.9 cm; it fills the olfactory grooves and extends along the planum sphenoidale and orbital
+                                 roofs; there is mild hyperostosis; mass effect is observed upon the paramedian inferior frontal lobes with
+                                 associated T1 hyperintense changes; no suspicious enhancing mass lesions are identified; ventricles are
+                                 unremarkable; no diffusion restriction to indicate acute ischemia is present.
+                                                                                                                                        Ground-truth
+                                 The MRI brain demonstrates an enhancing, ill-defined, heterogeneously enhancing, and heterogeneous lesion centered
+                                 in the right olfactory groove with extension into the right medial aspect of the anterior cranial fossa. The lesion is
+                                 closely applied to the right planum sphenoidale and cribriform plate. There is associated edema involving the anterior
+                                 and inferior aspects of the right frontal lobe. The differential diagnosis includes a small meningioma as well as tumor
+                                 such as esthesioneuroblastoma. No additional suspiciously enhancing lesions are identified in the brain parenchyma.
+                                 There is no evidence of hydrocephalus, midline shift, or herniation.
+                                                                                                                                          Generated
+
+Figure 16. Two example MRI reports generated by our VLM with a brat backbone. The reports largely capture the correct image findings.
+    You are a highly experienced radiologist. Accurately
+    answer the questions below based on the given brain MRI
+    report. Your output must be in json format.
+
+    (a) For each question, choose the appropriate an-
+    swer (wording must match exactly). If answers are
+    mutually exclusive, choose one. If multiple answers can
+    apply, list all that are true, separated by semicolons (”;”).
+    (b) If the MRI report does not contain information
+    to answer a specific question, use the default answer
+    indicating a normal status.
+    (c) Note the following assumptions: meningiomas are
+    considered enhancing lesions; burr holes and ventricu-
+    lostomy and Ommaya catheters are considered prior
+    surgery; punctate lesions are less than 1cm.
+
+    Questions (Answer options):
+    Is there evidence of prior surgery? (Yes / No)
+    What kind of surgery was performed? (NA / left
+    frontal craniotomy; right frontal craniotomy; left parietal
+    craniotomy; right parietal craniotomy; left temporal
+    or pterional craniotomy; right temporal or pterional
+    craniotomy ; left occipital craniotomy; right occipital
+    craniotomy)
+    Are there any enhancing lesions? (Yes / No)
+    What is the length of the biggest mass lesion? (NA / Less
+    than 1cm / 1 to 2cm / More than 2cm)
+    Which side of the brain has more enhancing lesions? (NA
+    / Left / Right)
+    List all the locations that contain enhancing lesions.
+    (NA / Left frontal lobe; Right frontal lobe; Left parietal
+    lobe; Right parietal lobe; Left temporal lobe; Right
+    temporal lobe; Left occipital lobe; Right occipital lobe;
+    Left thalamus or basal ganglia; Right thalamus or basal
+    ganglia; Cerebellum; brainstem; cervical spinal cord)
+    How many enhancing lesions are there? (NA / One /
+    Between 2 and 6 / Between 7 and 15 / More than 15)
+    Is there a herniation or midline shift? (Yes / No)
+    Are there any signs of white matter disease (e.g.,
+    leukoaraiosis or leukoencephalopathy)? (Yes / No)
+    Is the pituitary gland normal in appearance? (Yes / No)
+    Are there abnormalities in the sella or parasellar regions?
+    (Yes / No)
+    Where is there evidence of invasion into or compression
+    of adjacent structures? (Nowhere / ventricles; brainstem;
+    cranial nerves)
+
+    Brain MRI report: ${Insert processed report}$
+
+
+Figure 17. The final prompt that was used to extract structured
+information from the reports. Note that the structured information
+is mainly used to gain more understanding of our dataset and eval-
+uate models. The only model in this paper trained on these labels
+is the Classification baseline which we compare against in Table 4
+and Figure 7.
+  Original Report
+
+  FINDINGS: BRAIN: Unchanged plaque-like left parietal convexity enhancing meningioma at 0.9 x 0.3 cm with mild overlying hyperostosis; No suspicious parenchymal enhancing mass lesions, increase in Ktrans or increase in
+  plasma volume; Normal ventricles; no diffusion restriction to indicate acute ischemia.
+  IMPRESSION: Since February 2015, no brain metastasis. Unchanged subcm left parietal convexity meningioma. Unchanged mild enlargement of the pituitary gland. Unchanged benign left orbital lesion, possibly a hemangioma or
+  dermoid/epidermoid.
+
+
+                                                                                                                         ↓
+  Rewritten Report
+
+  Plaque-like left parietal convexity enhancing meningioma at 0.9 x 0.3 cm with mild overlying hyperostosis is present. No suspicious parenchymal enhancing mass lesions are observed. Ventricles appear normal. There is no diffusion
+  restriction indicating acute ischemia.
+
+
+                                                                                                                         ↓
+  Structured Report
+
+  • Evidence of prior surgery? No
+  • Kind of surgery performed? NA
+  • Enhancing lesions? Yes
+  • Non-enhancing lesions? No
+  • Biggest lesion length? ¡1cm
+  • Side with more enhancing lesions? Left
+  • Locations with enhancing lesions? Left parietal lobe
+  • Number of enhancing lesions? One
+  • Herniation/midline shift? No
+  • Hydrocephalus? No
+  • Type of hydrocephalus? NA
+  • White matter changes? No
+  • Grey matter abnormalities? No
+  • Pituitary gland normal? Yes
+  • Sella/parasellar abnormalities? No
+  • Evidence of invasion/compression? Nowhere
+
+
+
+
+Figure 18. An example of our automated report processing. Here, the intermediate re-written report omits the enlargement of the pituitary
+gland and left orbital lesion.
+
+
+
+
+  Original Report
+
+  FINDINGS: BRAIN: The peripherally enhancing centrally cystic/necrotic metastasis within inferior right frontal lobe bulging into frontal horn of the right lateral ventricle has not significantly changed in size when allowing for dif-
+  ferences in image acquisition. Extensive right anterior hemispheric vasogenic edema which extends into the basal ganglia and anterior thalamus appears mildly improved. Mass effect resulting in right-to-left midline shift has mildly
+  improved as well. The Ommaya catheter remains in place with its tip within necrotic core of the right inferior frontal lobe mass. The nodular dural based thickening along the anteroinferior margin of the right frontal burr hole has
+  increased now measuring 1.8 x 1.3 cm on the axial images, having previously measured 1.1 x 0.8 cm. On the coronal images, it measures 1.5 x 0.8 cm and likely represent focal dural based tumor. The previously seen superficial
+  focus of enhancement along the right inferior frontal gyrus appears less conspicuous. Small enhancing lesion adjacent to upper aspect of the Ommaya catheter has increased in size now measuring 4 to 5 mm. Right high parafalcine
+  parietal hemorrhagic lesion has not significantly changed. Background white matter changes are stable.
+  IMPRESSION: Compared to December 21, 2011; 1. Mild progression of dural based disease along the anteroinferior margin of the right frontal burr hole. 2. Mild progression of the metastasis adjacent to upper aspect of the right
+  Ommaya catheter. 3. Stable hemorrhagic lesion within high right parafalcine parietal lobe. 4. The heterogeneous right inferior frontal lobe mass its stable in size however, right hemispheric edema and mass effect have mildly im-
+  proved.
+
+
+                                                                                                                         ↓
+  Rewritten Report
+
+  The peripherally enhancing centrally cystic/necotic metastasis is located within the inferior right frontal lobe, bulging into the frontal horn of the right lateral ventricle. There is extensive right anterior hemispheric vasogenic edema ex-
+  tending into the basal ganglia and anterior thalamus. Mass effect results in right-to-left midline shift. The Ommaya catheter is in place with its tip within the necrotic core of the right inferior frontal lobe mass. There is nodular dural
+  based thickening along the anteroinferior margin of the right frontal burr hole, measuring 1.8 x 1.3 cm on the axial images. On the coronal images, it measures 1.5 x 0.8 cm and likely represents a focal dural based tumor. There is
+  a superficial focus of enhancement along the right inferior frontal gyrus. A small enhancing lesion is adjacent to the upper aspect of the Ommaya catheter, measuring 4 to 5 mm. There is a right high parafalcine parietal hemorrhagic
+  lesion. Background white matter changes are present.
+
+
+                                                                                                                         ↓
+  Structured Report
+
+  • Is there evidence of prior surgery? Yes
+  • What kind of surgery was performed? Right frontal craniotomy
+  • Are there any enhancing lesions? Yes
+  • Are there any non-enhancing lesions? Yes
+  • What is the length of the biggest lesion? 1 to 2 cm
+  • Which side of the brain has more enhancing lesions? Right
+  • List all the locations that contain enhancing lesions. Right frontal lobe; Right thalamus or basal ganglia
+  • How many enhancing lesions are there? Between 2 and 6
+  • Is there a herniation or midline shift? Yes
+  • Is there hydrocephalus? No
+  • What kind of hydrocephalus is there? NA
+  • Are there white matter changes suggestive of other pathologies? Yes
+  • Are there abnormalities in the cortical or subcortical grey matter suggestive of other pathologies? No
+  • Is the pituitary gland normal in appearance? Yes
+  • Are there abnormalities in the sella or parasellar regions? No
+  • Where is there evidence of invasion into or compression of adjacent structures? Ventricles
+
+
+
+
+                                            Figure 19. An example of a long and complex report that was processed successfully.
+  Original Report
+
+  FINDINGS: BRAIN: The patient is status post prior left anterior parietal craniotomy. Slightly increased heterogeneously enhancing nodularity along the posterior medial aspect of the left frontal operative bed as seen on series 4 im-
+  age 26 measuring 1.5 x 1.1 cm, previously 1.4 x 1.1 cm on July 5, 2016 and 1.3 x 0.9 cm on January 4, 2016. No ependymal or leptomeningeal foci have developed. Perfusion series again demonstrates elevated kTrans and plasma
+  volume within this nodular focus. No hydrocephalus, midline shift or herniation. No at parenchymal hemorrhage. No abnormal extra-axial collections. No acute infarct. Normal intracranial arterial flow-voids.
+  IMPRESSION: Subtle increase in size of the nodular enhancing tumor along the posterior medial aspect of the left middle frontal operative bed, the tumor demonstrating focal elevation of perfusion parameters, a characteristic finding
+  with oligodendrogliomas.
+
+
+                                                                                                                      ↓
+  Rewritten Report
+
+  The patient has undergone a left anterior parietal craniotomy. There is a heterogeneously enhancing nodularity along the posterior medial aspect of the left frontal operative bed, visible on series 4 image 26, measuring 1.5 x 1.1 cm.
+  No ependymal or leptomeningeal foci are present. No hydrocephalus, midline shift or herniation is observed. There is no parenchymal hemorrhage. No abnormal extra-axial collections are seen. No acute infarct is present. Intracra-
+  nial arterial flow-voids are normal.
+
+                                                                                                                      ↓
+  Structured Report
+
+  • Evidence of prior surgery? Yes; Kind of surgery performed? left parietal craniotomy
+  • Enhancing lesions? Yes; Biggest lesion length? 1 to 2cm; Side with more enhancing lesions? Left; Locations with enhancing lesions? Left frontal lobe; Number of enhancing lesions? One
+  • Non-enhancing lesions? No
+  • Herniation/midline shift? No
+  • Hydrocephalus? No; Type of hydrocephalus? NA
+  • White matter changes? No
+  • Pituitary gland normal? Yes
+  • Sella/parasellar abnormalities? No
+  • Evidence of invasion/compression? Nowhere
+
+
+
+
+Figure 20. An example of our automated report processing. The re-writing correctly rephrases the sentences, making references to changes
+in findings and removes references to, e.g. kTrans findings. The structured information extraction correctly answers all our instructions.
+
